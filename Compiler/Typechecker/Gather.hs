@@ -21,8 +21,8 @@ pushPtsGeq pta ptb = do
   let nssPaired = M.fromList $ tmpa.nsArgs `zip` tmpb.nsArgs
   let argsPaired = (snd <$> pta.procTypeArgs) `zip` (snd <$> ptb.procTypeArgs)
 
-  let typeApplyRewriteHere = typeApplyRewrite typesPaired nssPaired
-  let nsApplyRewriteHere = nsApplyRewrite typesPaired nssPaired
+  let typeApplyRewriteHere = typeApplyRewrite typesPaired
+  let nsApplyRewriteHere = nsApplyRewrite nssPaired
   let procTypeApplyRewriteHere = procTypeApplyRewrite typesPaired nssPaired
 
   mapM_ (\(ta, tb) -> typeApplyRewriteHere ta `pushEqConstraint` tb) argsPaired
@@ -67,8 +67,8 @@ gatherProcCall sid pc@(ProcCall{}) pt = do
   let typesPaired = M.fromList $ pt.procTypeTemplate.typeArgs `zip` pc.callTypeArgs
   let nssPaired = M.fromList $ pt.procTypeTemplate.nsArgs `zip` pc.callNSArgs
 
-  let typeApplyRewriteHere = typeApplyRewrite typesPaired nssPaired
-  let nsApplyRewriteHere = nsApplyRewrite typesPaired nssPaired
+  let typeApplyRewriteHere = typeApplyRewrite typesPaired
+  let nsApplyRewriteHere = nsApplyRewrite nssPaired
   let procTypeApplyRewriteHere = procTypeApplyRewrite typesPaired nssPaired
 
   let expectedArgTypes = typeApplyRewriteHere . snd <$> pt.procTypeArgs

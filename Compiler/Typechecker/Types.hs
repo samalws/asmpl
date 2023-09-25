@@ -51,11 +51,13 @@ litType (FloatLiteral _) = FloatType
 litType (DoubleLiteral _) = DoubleType
 litType (TagLiteral t) = TagType t
 
-typeApplyRewrite :: M.Map VarID Type -> M.Map VarID VarID -> Type -> Type
-typeApplyRewrite = undefined -- TODO
+typeApplyRewrite :: M.Map VarID Type -> Type -> Type
+typeApplyRewrite tm t@(VarType i) = M.findWithDefault t i tm
+typeApplyRewrite tm (RecordsType rs) = RecordsType $ map (map (\(RecordEntryType t c) -> RecordEntryType (typeApplyRewrite tm t) c)) rs
+typeApplyRewrite _ t = t
 
-nsApplyRewrite :: M.Map VarID Type -> M.Map VarID VarID -> VarID -> VarID
-nsApplyRewrite = undefined -- TODO
+nsApplyRewrite :: M.Map VarID VarID -> VarID -> VarID
+nsApplyRewrite nm n = M.findWithDefault n n nm
 
 procTypeApplyRewrite :: M.Map VarID Type -> M.Map VarID VarID -> ProcType -> ProcType
-procTypeApplyRewrite = undefined -- TODO
+procTypeApplyRewrite tm nm pt = undefined -- TODO UHHHHHHHHHHh
