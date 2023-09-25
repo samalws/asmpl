@@ -7,13 +7,47 @@ import Compiler.Typechecker.Monads
 
 import qualified Data.Set as S
 import qualified Data.Map as M
+import Control.Monad (when)
+import Data.Maybe (isJust, fromJust)
 
-getProcType :: (GatherMonad m) => StmtID -> Stmt -> m (Maybe ProcType)
-getProcType sid pc@(ProcCall{}) = undefined -- TODO
+-- ProcCall { callNS :: VarID, callFn :: String, callTypeArgs :: [Type], callNSArgs :: [Namespace], callArgs :: [VarID], callNext :: StmtID }
+-- Template { typeArgs :: [VarID], nsArgs :: [VarID], numericConstraints :: S.Set VarID, intConstraints :: S.Set VarID, nsConstraints :: S.Set (VarID, String, ProcType) }
+
+gatherNSConstraint :: (GatherMonad m) => StmtID -> (VarID, String, ProcType) -> m ()
+gatherNSConstraint = undefined -- TODO
+
+getProcType :: (GatherMonad m) => StmtID -> Stmt -> m ProcType
+getProcType sid pc@(ProcCall{}) = do
+  globalNsVal <- M.lookup pc.callNS . globalNamespaces <$> getGlobalEnv
+  let isGlobal = isJust globalNsVal
+
+  thisProcTemplate <- procTypeTemplate . procType <$> getProc
+  let localNsConstrs = thisProcTemplate.nsConstraints
+  let isLocal = pc.callNS `elem` thisProcTemplate.nsArgs
+
+  if isGlobal then do
+    let Just p = pc.callFn `M.lookup` fns (fromJust globalNsVal)
+    pure p.procType
+  else if isLocal then do
+    let [(_,_,t)] = filter (\(n,f,_) -> n == pc.callNS && f == pc.callFn) $ S.toList localNsConstrs -- TODO MonadFail handles this correctly?
+    pure t
+  else fail "ProcCall with nonexistent namespace"
+
 getProcType _ _ = error "getProcType called with non ProcCall value"
 
 gatherProcCall :: (GatherMonad m) => StmtID -> Stmt -> ProcType -> m () 
-gatherProcCall sid pc@(ProcCall{}) pt = undefined -- TODO
+gatherProcCall sid pc@(ProcCall{}) pt = do
+  when (length pc.callTypeArgs /= length pt.procTypeTemplate.typeArgs || length pc.callNSArgs /= length pt.procTypeTemplate.nsArgs || length pc.callArgs /= length pt.procTypeArgs) $ fail "incorrect number of proc arguments"
+  let typesPaired = M.fromList $ pt.procTypeTemplate.typeArgs `zip` pc.callTypeArgs
+  let nssPaired = M.fromList $ pt.procTypeTemplate.nsArgs `zip` pc.callNSArgs
+  let typeApplyTemplateHere = typeApplyTemplate typesPaired nssPaired
+  let expectedArgTypes = typeApplyTemplateHere . snd <$> pt.procTypeArgs
+  realArgTypes <- mapM (getVarTypeAt sid) pc.callArgs
+  sequence_ $ zipWith pushEqConstraint realArgTypes expectedArgTypes
+  mapM_ (pushNumericConstraint . typeApplyTemplateHere . VarType) $ S.toList pt.procTypeTemplate.numericConstraints
+  mapM_ (pushIntConstraint . typeApplyTemplateHere . VarType) $ S.toList pt.procTypeTemplate.intConstraints
+  mapM_ (gatherNSConstraint sid . (\(n,f,t) -> (nsApplyTemplate typesPaired nssPaired n, f, procTypeApplyTemplate typesPaired nssPaired t))) $ S.toList pt.procTypeTemplate.nsConstraints
+
 gatherProcCall _ _ _ = error "gatherProcCall called with non ProcCall value"
 
 gatherStmt_ :: (GatherMonad m) => StmtID -> Stmt -> m ()
@@ -31,7 +65,7 @@ gatherStmt_ sid (AssignMember v r m _) = do
   pushMemberTypeConstraint tr m tm
   pushGeqConstraint tv tm
 gatherStmt_ sid pc@(ProcCall{}) = do
-  Just pt <- getProcType sid pc
+  pt <- getProcType sid pc
   gatherProcCall sid pc pt
 gatherStmt_ sid (JNZ v _ _) = do
   tv <- getVarTypeAt sid v
