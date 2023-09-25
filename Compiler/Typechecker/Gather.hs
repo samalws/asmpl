@@ -10,9 +10,6 @@ import qualified Data.Map as M
 import Control.Monad (when)
 import Data.Maybe (isJust, fromJust)
 
--- ProcCall { callNS :: VarID, callFn :: String, callTypeArgs :: [Type], callNSArgs :: [Namespace], callArgs :: [VarID], callNext :: StmtID }
--- Template { typeArgs :: [VarID], nsArgs :: [VarID], numericConstraints :: S.Set VarID, intConstraints :: S.Set VarID, nsConstraints :: S.Set (VarID, String, ProcType) }
-
 gatherNSConstraint :: (GatherMonad m) => StmtID -> (VarID, String, ProcType) -> m ()
 gatherNSConstraint = undefined -- TODO
 
@@ -73,6 +70,7 @@ gatherStmt_ sid (JNZ v _ _) = do
 gatherStmt_ sid (AssertVarType v t _) = do
   tv <- getVarTypeAt sid v
   pushEqConstraint tv t
+gatherStmt_ _ Return = pure ()
 
 gatherStmt :: (GatherMonad m) => StmtID -> m ()
 gatherStmt sid = do

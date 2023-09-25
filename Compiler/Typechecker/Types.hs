@@ -13,6 +13,7 @@ data Stmt = AssignVar VarID VarID StmtID
           | ProcCall { callNS :: VarID, callFn :: String, callTypeArgs :: [Type], callNSArgs :: [VarID], callArgs :: [VarID], callNext :: StmtID }
           | JNZ VarID {- where you go if nonzero: -} StmtID {- where you go if zero: -} StmtID
           | AssertVarType VarID Type StmtID
+          | Return
           deriving (Show, Eq)
 data Literal = IntLiteral { litIsSigned :: Bool, litBits :: Int, litIntVal :: Integer }
              | FloatLiteral Float
@@ -33,7 +34,7 @@ data NamespaceValue = NSValue { fns :: M.Map String Proc } deriving (Show, Eq)
 data RecordEntryType = RecordEntryType Type (Maybe RecordEntryConstraint) deriving (Show, Eq)
 data RecordEntryConstraint = EqConstraint Literal | RangeConstraint Literal Literal deriving (Show, Eq)
 data ProcType = ProcType { procTypeTemplate :: Template, procTypeArgs :: [(VarID, Type)] } deriving (Show, Eq)
-data Proc = Proc { procType :: ProcType, procStmts :: M.Map StmtID Stmt } deriving (Show, Eq) -- 0 is entry point, 1 is exit point
+data Proc = Proc { procType :: ProcType, procStmts :: M.Map StmtID Stmt } deriving (Show, Eq) -- 0 is entry point, not that it matters
 
 stmtSuccessors :: Stmt -> S.Set StmtID
 stmtSuccessors (AssignVar _ _ id) = S.singleton id
@@ -42,6 +43,7 @@ stmtSuccessors (AssignMember _ _ _ id) = S.singleton id
 stmtSuccessors pc@(ProcCall{}) = S.singleton (callNext pc)
 stmtSuccessors (JNZ _ a b) = S.fromList [a,b]
 stmtSuccessors (AssertVarType _ _ id) = S.singleton id
+stmtSuccessors Return = S.empty
 
 litType :: Literal -> Type
 litType i@(IntLiteral{}) = IntType { signed = litIsSigned i, bits = litBits i }
