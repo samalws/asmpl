@@ -86,16 +86,16 @@ gatherStmt_ :: (GatherMonad m) => StmtID -> Stmt -> m ()
 gatherStmt_ sid (AssignVar va vb _) = do
   ta <- getVarTypeAt sid va
   tb <- getVarTypeAt sid vb
-  ta `pushGeqConstraint` tb -- we can assign a|b <- a
+  ta `pushEqConstraint` tb -- we can assign a|b <- a
 gatherStmt_ sid (AssignLit v l _) = do
   tv <- getVarTypeAt sid v
-  pushGeqConstraint tv (litType l)
+  pushEqConstraint tv (litType l)
 gatherStmt_ sid (AssignMember v r m _) = do
   tv <- getVarTypeAt sid v
   tr <- getVarTypeAt sid r
   tm <- newType
   pushMemberTypeConstraint tr m tm
-  pushGeqConstraint tv tm
+  pushEqConstraint tv tm
 gatherStmt_ sid pc@(ProcCall{}) = do
   pt <- getProcType pc.callNS pc.callFn
   gatherProcCall sid pc pt
@@ -116,12 +116,13 @@ gatherStmt sid = do
   allVars <- getAllVars
   let
     allVarsList = S.toList allVars
-    handleNextStmtVar sid' v = do
+    handleNextStmtVar sid' (geq,v) = do
       tv <- getVarTypeAt sid v
       tv' <- getVarTypeAt sid' v
-      tv' `pushGeqConstraint` tv -- since we "assign" tv' <- tv
-    modifiedVarsList (AssertVarType v _ _) = filter (/= v) allVarsList
-    modifiedVarsList _ = allVarsList
+      let pushConstraint = if geq then pushGeqConstraint else pushEqConstraint
+      tv' `pushConstraint` tv -- since we "assign" tv' <- tv
+    modifiedVarsList (AssertVarType v' _ _) = map (\v -> ((v == v'), v)) allVarsList
+    modifiedVarsList _ = map (False,) allVarsList
     handleNextStmt sid' = do
       let Just nextStmt = sid' `M.lookup` proc.procStmts
       mapM_ (handleNextStmtVar sid') (modifiedVarsList nextStmt)

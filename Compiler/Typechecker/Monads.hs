@@ -25,3 +25,7 @@ getVarTypeAt s v = VarType <$> getVarTypevarAt s v
 
 newType :: (GatherMonad m) => m Type
 newType = VarType <$> newTypevar
+
+class (MonadFail m) => UnifyMonad m where
+  lookupVar :: VarID -> m (Maybe Type)
+  assignVar :: VarID -> Type -> m ()
