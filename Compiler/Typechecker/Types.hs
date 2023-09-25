@@ -36,7 +36,11 @@ data Proc = Proc { procType :: ProcType, procStmts :: M.Map StmtID Stmt } derivi
 
 stmtSuccessors :: Stmt -> S.Set StmtID
 stmtSuccessors (AssignVar _ _ id) = S.singleton id
--- ... TODO
+stmtSuccessors (AssignLit _ _ id) = S.singleton id
+stmtSuccessors (AssignMember _ _ _ id) = S.singleton id
+stmtSuccessors pc@(ProcCall{}) = S.singleton (callNext pc)
+stmtSuccessors (JNZ _ a b) = S.fromList [a,b]
+stmtSuccessors (AssertVarType _ _ id) = S.singleton id
 
 litType :: Literal -> Type
 litType i@(IntLiteral{}) = IntType { signed = litIsSigned i, bits = litBits i }
