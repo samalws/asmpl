@@ -32,14 +32,13 @@ pushPtsGeq pta ptb = do
   let intConstrsA' = S.map (typeApplyRewriteHere . VarType) tmpa.intConstraints
   let intConstrsB' = S.map VarType tmpb.intConstraints
   let
-    modifyNsConstr :: (VarID, String, ProcType) -> (VarID, String, Template, [Type])
-    modifyNsConstr (n,f,t) = (n,f,t.procTypeTemplate,snd <$> t.procTypeArgs) -- we want to ignore type names when checking equality
-  let nsConstrsA' = S.map (modifyNsConstr . (\(n,f,t) -> (nsApplyRewriteHere n, f, procTypeApplyRewriteHere t))) tmpa.nsConstraints
-  let nsConstrsB' = S.map modifyNsConstr tmpb.nsConstraints
+    checkConstrB (nb,fb,tb) = do
+      let [(_,_,ta)] = filter (\(na,fa,_) -> (nsApplyRewriteHere na,fa) == (nb,fb)) $ S.toList tmpa.nsConstraints
+      when (not $ procsEquivalent (procTypeApplyRewriteHere ta) tb) $ fail "mismatched procs: namespace constraints not matched"
 
   when (not $ S.null $ S.difference numConstrsB' numConstrsA') $ fail "mismatched procs: numeric constraints not matched"
   when (not $ S.null $ S.difference intConstrsB' intConstrsA') $ fail "mismatched procs: int constraints not matched"
-  when (not $ S.null $ S.difference nsConstrsB' nsConstrsA') $ fail "mismatched procs: namespace constraints not matched"
+  mapM_ checkConstrB $ S.toList tmpb.nsConstraints
 
 gatherNSConstraint :: (GatherMonad m) => (VarID, String, ProcType) -> m ()
 gatherNSConstraint (ns, fn, pt) = pushPtsGeq pt =<< getProcType ns fn

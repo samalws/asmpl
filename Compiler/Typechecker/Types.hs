@@ -61,3 +61,6 @@ nsApplyRewrite nm n = M.findWithDefault n n nm
 
 procTypeApplyRewrite :: M.Map VarID Type -> M.Map VarID VarID -> ProcType -> ProcType
 procTypeApplyRewrite tm nm pt = undefined -- TODO UHHHHHHHHHHh
+
+procsEquivalent :: ProcType -> ProcType -> Bool
+procsEquivalent pta ptb = undefined -- TODO
