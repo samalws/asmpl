@@ -13,9 +13,10 @@ class (MonadFail m) => GatherMonad m where
   getProc :: m Proc
   getAllVars :: m (S.Set VarID)
   getVarTypevarAt :: StmtID -> VarID -> m VarID
+  -- in the order that theyll eventually get resolved by unify:
   pushEqConstraint :: Type -> Type -> m ()
-  pushGeqConstraint :: Type -> Type -> m () -- a | b >= a
   pushMemberTypeConstraint :: Type -> RecordMember -> Type -> m () -- pushMemberTypeConstraint a b c: a.b has type c
+  pushGeqConstraint :: Type -> Type -> m () -- a | b >= a
   pushNumericConstraint :: Type -> m ()
   pushIntConstraint :: Type -> m ()
   newTypevar :: m VarID
@@ -28,4 +29,10 @@ newType = VarType <$> newTypevar
 
 class (MonadFail m) => UnifyMonad m where
   lookupVar :: VarID -> m (Maybe Type)
+  -- no double-assignments: assignVar v t >> assignVar v s should fail even if t == s
+  -- assignVar v t should fail if varIsTemplateType v returns True
   assignVar :: VarID -> Type -> m ()
+  varIsTemplateType :: VarID -> m Bool
+  varAssumedNumeric :: VarID -> m Bool
+  varAssumedInt :: VarID -> m Bool
+  anythingHappened :: m () -> m Bool
