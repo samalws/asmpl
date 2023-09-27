@@ -49,13 +49,13 @@ newtype NumericVarSet = NumericVarSet { runNumericVarSet :: S.Set VarID }
 newtype IntVarSet = IntVarSet { runIntVarSet :: S.Set VarID }
 
 makeTemplateVarSet :: Proc -> TemplateVarSet
-makeTemplateVarSet = undefined -- TODO
+makeTemplateVarSet = TemplateVarSet . getTypeVarSetProc
 
 makeNumericVarSet :: Proc -> NumericVarSet
-makeNumericVarSet lateVarSet = undefined -- TODO
+makeNumericVarSet = NumericVarSet . (.procType.procTypeTemplate.numericConstraints)
 
 makeIntVarSet :: Proc -> IntVarSet
-makeIntVarSet = undefined -- TODO
+makeIntVarSet = IntVarSet . (.procType.procTypeTemplate.intConstraints)
 
 type UnifyMonadImpl = ReaderT (TemplateVarSet, NumericVarSet, IntVarSet) (StateT (M.Map VarID Type) EitherString)
 
@@ -79,9 +79,11 @@ instance UnifyMonad UnifyMonadImpl where
 runUnifyMonadImpl :: TemplateVarSet -> NumericVarSet -> IntVarSet -> UnifyMonadImpl t -> EitherString (t, M.Map VarID Type)
 runUnifyMonadImpl t n i = flip runStateT M.empty . flip runReaderT (t,n,i)
 
--- returns varmap, new max id
-makeVarMap :: Proc -> VarID -> (M.Map (StmtID, VarID) VarID, VarID)
-makeVarMap p maxID = undefined -- TODO
+cartesianProduct :: [a] -> [b] -> [(a,b)]
+cartesianProduct as bs = concatMap (\a -> (a,) <$> bs) as
+
+makeVarMap :: Proc -> VarID -> S.Set VarID -> M.Map (StmtID, VarID) VarID
+makeVarMap p startID varset = M.fromList $ (M.keys p.procStmts `cartesianProduct` S.toList varset) `zip` [startID..]
 
 applySnd :: (Functor f) => (b -> f c) -> (a, b) -> f (a, c)
 applySnd f (a, b) = (a,) <$> f b
@@ -94,9 +96,11 @@ runGatherGlobal ge = fmap M.fromList $ mapSnd f $ M.toList ge.globalNamespaces w
   f ns = fmap M.fromList $ mapSnd g $ M.toList ns.fns
   g proc =
     let
-      (varset, maxID0) = getVarSet proc
-      (varmap, maxID) = makeVarMap proc (succ maxID0)
-    in runGatherMonadImpl ge proc varset varmap (succ maxID) (gatherProc >> pure varmap)
+      varset = getVarSetProc proc
+      startID0 = succ $ getHighestVarIDProc proc
+      varmap = makeVarMap proc startID0 varset
+      startID = succ $ startID0 + VarID (M.size varmap)
+    in runGatherMonadImpl ge proc varset varmap startID (gatherProc >> pure varmap)
 
 sequenceMap :: (Monad m, Ord k) => M.Map k (m v) -> m (M.Map k v)
 sequenceMap = fmap M.fromList . mapM (\(k,mv) -> (k,) <$> mv) . M.toList

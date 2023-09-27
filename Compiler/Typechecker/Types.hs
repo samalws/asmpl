@@ -1,7 +1,11 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Compiler.Typechecker.Types where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
+
+import Data.Foldable (foldMap)
 
 newtype StmtID = StmtID { fromStmtID :: Int } deriving (Show, Eq, Ord, Num, Enum)
 newtype VarID = VarID { fromVarID :: Int } deriving (Show, Eq, Ord, Num, Enum)
@@ -68,9 +72,29 @@ nsApplyRewrite nm n = M.findWithDefault n n nm
 procTypeApplyRewrite :: M.Map VarID Type -> M.Map VarID VarID -> ProcType -> ProcType
 procTypeApplyRewrite tm nm pt = undefined -- TODO UHHHHHHHHHHh
 
-procsEquivalent :: ProcType -> ProcType -> Bool
-procsEquivalent pta ptb = undefined -- TODO
+procTypesEquivalent :: ProcType -> ProcType -> Bool
+procTypesEquivalent pta ptb = undefined -- TODO
 
--- returns var set, highest var
-getVarSet :: Proc -> (S.Set VarID, VarID)
-getVarSet = undefined -- TODO
+getVarSetStmt :: Stmt -> S.Set VarID
+getVarSetStmt (AssignVar a b _) = S.fromList [a,b]
+getVarSetStmt (AssignVarGeq a b _ _) = S.fromList [a,b]
+getVarSetStmt (AssignVarLeq a b _ _) = S.fromList [a,b]
+getVarSetStmt (AssignLit a _ _) = S.singleton a
+getVarSetStmt (AssignMember a b _ _) = S.fromList [a,b]
+getVarSetStmt pc@(ProcCall{}) = S.fromList pc.callArgs
+getVarSetStmt (JNZ a _ _) = S.singleton a
+getVarSetStmt (Nop _) = S.empty
+getVarSetStmt Unreachable = S.empty
+getVarSetStmt Return = S.empty
+
+getVarSetProc :: Proc -> S.Set VarID
+getVarSetProc p = S.fromList (fst <$> p.procType.procTypeArgs) `S.union` foldMap getVarSetStmt p.procStmts
+
+getTypeVarSetProc :: Proc -> S.Set VarID
+getTypeVarSetProc p = S.fromList p.procType.procTypeTemplate.typeArgs
+
+getNSVarSetProc :: Proc -> S.Set VarID
+getNSVarSetProc p = S.fromList p.procType.procTypeTemplate.nsArgs
+
+getHighestVarIDProc :: Proc -> VarID
+getHighestVarIDProc p = maximum $ maximum <$> [getVarSetProc p, getTypeVarSetProc p, getNSVarSetProc p]

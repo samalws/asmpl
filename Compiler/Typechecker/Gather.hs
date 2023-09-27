@@ -34,7 +34,7 @@ pushPtsGeq pta ptb = do
   let
     checkConstrB (nb,fb,tb) = do
       let [(_,_,ta)] = filter (\(na,fa,_) -> (nsApplyRewriteHere na,fa) == (nb,fb)) $ S.toList tmpa.nsConstraints
-      unless (procTypeApplyRewriteHere ta `procsEquivalent` tb) $ fail "mismatched procs: namespace constraints not matched"
+      unless (procTypeApplyRewriteHere ta `procTypesEquivalent` tb) $ fail "mismatched procs: namespace constraints not matched"
 
   unless (S.null $ S.difference numConstrsB' numConstrsA') $ fail "mismatched procs: numeric constraints not matched"
   unless (S.null $ S.difference intConstrsB' intConstrsA') $ fail "mismatched procs: int constraints not matched"
