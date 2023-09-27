@@ -96,5 +96,8 @@ getTypeVarSetProc p = S.fromList p.procType.procTypeTemplate.typeArgs
 getNSVarSetProc :: Proc -> S.Set VarID
 getNSVarSetProc p = S.fromList p.procType.procTypeTemplate.nsArgs
 
+safeMax :: S.Set VarID -> VarID
+safeMax s = maximum (S.singleton 0 `S.union` s)
+
 getHighestVarIDProc :: Proc -> VarID
-getHighestVarIDProc p = maximum $ maximum <$> [getVarSetProc p, getTypeVarSetProc p, getNSVarSetProc p]
+getHighestVarIDProc p = maximum $ safeMax <$> [getVarSetProc p, getTypeVarSetProc p, getNSVarSetProc p]
