@@ -4,10 +4,10 @@ import Compiler.Typechecker.Types
 import Compiler.Typechecker.Monads
 
 import Control.Monad (unless, join, liftM2, zipWithM_)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (maybe)
 
 simplifyType :: (UnifyMonad m) => Type -> m Type
-simplifyType t@(VarType v) = fromMaybe t <$> lookupVar v
+simplifyType t@(VarType v) = maybe (pure t) simplifyType =<< lookupVar v
 simplifyType (RecordsType l) = RecordsType <$> mapM (mapM simplifyRecordEntry) l
 simplifyType t = pure t
 

@@ -26,13 +26,13 @@ data GeqConstr = GeqConstr Type Type
 data NumericConstr = NumericConstr Type
 data IntConstr = IntConstr Type
 
-type GatherMonadImpl = ReaderT (GlobalEnv, Proc, S.Set VarID, M.Map (StmtID, VarID) VarID) (StateT ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr],VarID) EitherString)
+type GatherMonadImpl = ReaderT (GlobalEnv, Proc, S.Set VarID, M.Map VarID VarID) (StateT ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr],VarID) EitherString)
 
 instance GatherMonad GatherMonadImpl where
   getGlobalEnv = asks getter
   getProc = asks getter
   getAllVars = asks getter
-  getVarTypevarAt s v = asks (M.lookup (s,v) . getter) >>= maybe (fail "Typevar lookup failed") pure
+  getVarTypevar v = asks (M.lookup v . getter) >>= maybe (fail "Typevar lookup failed") pure
   pushEqConstraint a b = modify . modifier $ (EqConstr a b :)
   pushMemberTypeConstraint a b c = modify . modifier $ (MemberTypeConstr a b c :)
   pushGeqConstraint a b = modify . modifier $ (GeqConstr a b :)
@@ -40,7 +40,7 @@ instance GatherMonad GatherMonadImpl where
   pushIntConstraint a = modify . modifier $ (IntConstr a :)
   newTypevar = modify (modifier (succ :: VarID -> VarID)) >> gets getter
 
-runGatherMonadImpl :: GlobalEnv -> Proc -> S.Set VarID -> M.Map (StmtID, VarID) VarID -> VarID -> GatherMonadImpl t -> EitherString (t, ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]))
+runGatherMonadImpl :: GlobalEnv -> Proc -> S.Set VarID -> M.Map VarID VarID -> VarID -> GatherMonadImpl t -> EitherString (t, ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]))
 runGatherMonadImpl globalEnv proc varIDs varMap maxVarID = fmap modifyResult . flip runStateT ([],[],[],[],[],maxVarID) . flip runReaderT (globalEnv, proc, varIDs, varMap) where
   modifyResult (retVal, (ca,cb,cc,cd,ce,_)) = (retVal,(ca,cb,cc,cd,ce))
 
@@ -79,26 +79,23 @@ instance UnifyMonad UnifyMonadImpl where
 runUnifyMonadImpl :: TemplateVarSet -> NumericVarSet -> IntVarSet -> UnifyMonadImpl t -> EitherString (t, M.Map VarID Type)
 runUnifyMonadImpl t n i = flip runStateT M.empty . flip runReaderT (t,n,i)
 
-cartesianProduct :: [a] -> [b] -> [(a,b)]
-cartesianProduct as bs = concatMap (\a -> (a,) <$> bs) as
-
-makeVarMap :: Proc -> VarID -> S.Set VarID -> M.Map (StmtID, VarID) VarID
-makeVarMap p startID varset = M.fromList $ (M.keys p.procStmts `cartesianProduct` S.toList varset) `zip` [startID..]
+makeVarMap :: VarID -> S.Set VarID -> M.Map VarID VarID
+makeVarMap startID varset = M.fromList $ S.toList varset `zip` [startID..]
 
 applySnd :: (Functor f) => (b -> f c) -> (a, b) -> f (a, c)
 applySnd f (a, b) = (a,) <$> f b
 
-mapSnd :: (Monad m, Traversable t) => (b -> m c) -> t (a, b) -> m (t (a, c))
-mapSnd = mapM . applySnd
+mapMSnd :: (Monad m, Traversable t) => (b -> m c) -> t (a, b) -> m (t (a, c))
+mapMSnd = mapM . applySnd
 
-runGatherGlobal :: GlobalEnv -> EitherString (M.Map VarID (M.Map String (M.Map (StmtID, VarID) VarID, ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]))))
-runGatherGlobal ge = fmap M.fromList $ mapSnd f $ M.toList ge.globalNamespaces where
-  f ns = fmap M.fromList $ mapSnd g $ M.toList ns.fns
+runGatherGlobal :: GlobalEnv -> EitherString (M.Map VarID (M.Map String (M.Map VarID VarID, ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]))))
+runGatherGlobal ge = fmap M.fromList $ mapMSnd f $ M.toList ge.globalNamespaces where
+  f ns = fmap M.fromList $ mapMSnd g $ M.toList ns.fns
   g proc =
     let
       varset = getVarSetProc proc
       startID0 = succ $ getHighestVarIDProc proc
-      varmap = makeVarMap proc startID0 varset
+      varmap = makeVarMap startID0 varset
       startID = succ $ startID0 + VarID (M.size varmap)
     in runGatherMonadImpl ge proc varset varmap startID (gatherProc >> pure varmap)
 
@@ -116,7 +113,7 @@ resolveMemberTypeConstrs cs = do
   let cs' = fmap fst $ filter snd $ cs `zip` changes
   resolveMemberTypeConstrs cs'
 
-resolveConstrs :: (UnifyMonad m) => ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]) -> M.Map (StmtID, VarID) VarID -> m (M.Map (StmtID, VarID) Type)
+resolveConstrs :: (UnifyMonad m) => ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]) -> M.Map VarID VarID -> m (M.Map VarID Type)
 resolveConstrs (ca,cb,cc,cd,ce) varmap = do
   mapM_ (\(EqConstr a b) -> resolveEqConstraint a b) ca
   resolveMemberTypeConstrs cb
@@ -125,12 +122,12 @@ resolveConstrs (ca,cb,cc,cd,ce) varmap = do
   mapM_ (\(IntConstr a) -> resolveIntConstraint a) ce
   mMapMapIndexed (const $ simplifyType . VarType) varmap
 
-runUnifyGlobal :: GlobalEnv -> M.Map VarID (M.Map String (M.Map (StmtID, VarID) VarID, ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]))) -> EitherString (M.Map VarID (M.Map String (M.Map (StmtID, VarID) Type)))
+runUnifyGlobal :: GlobalEnv -> M.Map VarID (M.Map String (M.Map VarID VarID, ([EqConstr],[MemberTypeConstr],[GeqConstr],[NumericConstr],[IntConstr]))) -> EitherString (M.Map VarID (M.Map String (M.Map VarID Type)))
 runUnifyGlobal ge = mMapMapIndexed (mMapMapIndexed . f) where
   f nsId procName (varmap, cs) =
     let proc = getProc nsId procName
     in fst <$> runUnifyMonadImpl (makeTemplateVarSet proc) (makeNumericVarSet proc) (makeIntVarSet proc) (resolveConstrs cs varmap)
   getProc nsId procName = (ge.globalNamespaces M.! nsId).fns M.! procName
 
-runTypechecker :: GlobalEnv -> Either String (M.Map VarID (M.Map String (M.Map (StmtID, VarID) Type)))
+runTypechecker :: GlobalEnv -> Either String (M.Map VarID (M.Map String (M.Map VarID Type)))
 runTypechecker ge = runEitherString $ runGatherGlobal ge >>= runUnifyGlobal ge

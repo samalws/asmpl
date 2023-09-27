@@ -12,7 +12,7 @@ class (MonadFail m) => GatherMonad m where
   getGlobalEnv :: m GlobalEnv
   getProc :: m Proc
   getAllVars :: m (S.Set VarID)
-  getVarTypevarAt :: StmtID -> VarID -> m VarID
+  getVarTypevar :: VarID -> m VarID
   -- in the order that theyll eventually get resolved by unify:
   pushEqConstraint :: Type -> Type -> m ()
   pushMemberTypeConstraint :: Type -> RecordMember -> Type -> m () -- pushMemberTypeConstraint a b c: a.b has type c
@@ -21,8 +21,8 @@ class (MonadFail m) => GatherMonad m where
   pushIntConstraint :: Type -> m ()
   newTypevar :: m VarID
 
-getVarTypeAt :: (GatherMonad m) => StmtID -> VarID -> m Type
-getVarTypeAt s v = VarType <$> getVarTypevarAt s v
+getVarType :: (GatherMonad m) => VarID -> m Type
+getVarType = fmap VarType . getVarTypevar
 
 newType :: (GatherMonad m) => m Type
 newType = VarType <$> newTypevar

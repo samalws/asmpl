@@ -60,8 +60,8 @@ getProcType ns fn = do
     pure t
   else fail "ProcCall with nonexistent namespace"
 
-gatherProcCall :: (GatherMonad m) => StmtID -> Stmt -> ProcType -> m () 
-gatherProcCall sid pc@(ProcCall{}) pt = do
+gatherProcCall :: (GatherMonad m) => Stmt -> ProcType -> m () 
+gatherProcCall pc@(ProcCall{}) pt = do
   unless (length pc.callTypeArgs == length pt.procTypeTemplate.typeArgs && length pc.callNSArgs == length pt.procTypeTemplate.nsArgs && length pc.callArgs == length pt.procTypeArgs) $ fail "incorrect number of proc arguments"
   let typesPaired = M.fromList $ pt.procTypeTemplate.typeArgs `zip` pc.callTypeArgs
   let nssPaired = M.fromList $ pt.procTypeTemplate.nsArgs `zip` pc.callNSArgs
@@ -71,7 +71,7 @@ gatherProcCall sid pc@(ProcCall{}) pt = do
   let procTypeApplyRewriteHere = procTypeApplyRewrite typesPaired nssPaired
 
   let expectedArgTypes = typeApplyRewriteHere . snd <$> pt.procTypeArgs
-  realArgTypes <- mapM (getVarTypeAt sid) pc.callArgs
+  realArgTypes <- mapM getVarType pc.callArgs
 
   zipWithM_ pushEqConstraint realArgTypes expectedArgTypes
 
@@ -79,57 +79,44 @@ gatherProcCall sid pc@(ProcCall{}) pt = do
   mapM_ (pushIntConstraint . typeApplyRewriteHere . VarType) $ S.toList pt.procTypeTemplate.intConstraints
   mapM_ (gatherNSConstraint . (\(n,f,t) -> (nsApplyRewriteHere n, f, procTypeApplyRewriteHere t))) $ S.toList pt.procTypeTemplate.nsConstraints
 
-gatherProcCall _ _ _ = error "gatherProcCall called with non ProcCall value"
+gatherProcCall _ _ = error "gatherProcCall called with non ProcCall value"
 
-gatherStmt_ :: (GatherMonad m) => StmtID -> Stmt -> m ()
-gatherStmt_ sid (AssignVar va vb _) = do
-  ta <- getVarTypeAt sid va
-  tb <- getVarTypeAt sid vb
+gatherStmt :: (GatherMonad m) => Stmt -> m ()
+gatherStmt (AssignVar va vb _) = do
+  ta <- getVarType va
+  tb <- getVarType vb
   ta `pushEqConstraint` tb
-gatherStmt_ sid (AssignVarGeq va vb ta' _) = do
-  ta <- getVarTypeAt sid va
-  tb <- getVarTypeAt sid vb
+gatherStmt (AssignVarGeq va vb ta' _) = do
+  ta <- getVarType va
+  tb <- getVarType vb
   maybe (pure ()) (pushEqConstraint ta) ta'
   ta `pushGeqConstraint` tb
-gatherStmt_ sid (AssignVarLeq va vb ta' _) = do
-  ta <- getVarTypeAt sid va
-  tb <- getVarTypeAt sid vb
+gatherStmt (AssignVarLeq va vb ta' _) = do
+  ta <- getVarType va
+  tb <- getVarType vb
   maybe (pure ()) (pushEqConstraint ta) ta'
   tb `pushGeqConstraint` ta
-gatherStmt_ sid (AssignLit v l _) = do
-  tv <- getVarTypeAt sid v
+gatherStmt (AssignLit v l _) = do
+  tv <- getVarType v
   pushEqConstraint tv (litType l)
-gatherStmt_ sid (AssignMember v r m _) = do
-  tv <- getVarTypeAt sid v
-  tr <- getVarTypeAt sid r
+gatherStmt (AssignMember v r m _) = do
+  tv <- getVarType v
+  tr <- getVarType r
   tm <- newType
   pushMemberTypeConstraint tr m tm
   pushEqConstraint tv tm
-gatherStmt_ sid pc@(ProcCall{}) = do
+gatherStmt pc@(ProcCall{}) = do
   pt <- getProcType pc.callNS pc.callFn
-  gatherProcCall sid pc pt
-gatherStmt_ sid (JNZ v _ _) = do
-  tv <- getVarTypeAt sid v
+  gatherProcCall pc pt
+gatherStmt (JNZ v _ _) = do
+  tv <- getVarType v
   pushIntConstraint tv
-gatherStmt_ _ (Nop _) = pure ()
-gatherStmt_ _ Unreachable = pure ()
-gatherStmt_ _ Return = pure ()
-
-gatherStmtNext :: (GatherMonad m) => StmtID -> Stmt -> m ()
-gatherStmtNext sid thisStmt = do
-  allVarsList <- S.toList <$> getAllVars
-  let
-    handleNextStmtVar sid' v = do
-      tv <- getVarTypeAt sid v
-      tv' <- getVarTypeAt sid' v
-      tv `pushEqConstraint` tv'
-    handleNextStmt sid' = mapM_ (handleNextStmtVar sid') allVarsList
-  mapM_ handleNextStmt $ stmtSuccessors thisStmt
-
-gatherStmt :: (GatherMonad m) => StmtID -> Stmt -> m ()
-gatherStmt sid thisStmt = gatherStmt_ sid thisStmt >> gatherStmtNext sid thisStmt
+gatherStmt (Nop _) = pure ()
+gatherStmt Unreachable = pure ()
+gatherStmt Return = pure ()
 
 gatherProc :: (GatherMonad m) => m ()
 gatherProc = do
   proc <- getProc
-  mapM_ (uncurry gatherStmt) $ M.toList proc.procStmts
+  mapM_ (\(v, t) -> pushEqConstraint t =<< getVarType v) proc.procType.procTypeArgs
+  mapM_ gatherStmt (M.elems proc.procStmts)

@@ -8,7 +8,7 @@ import qualified Data.Map as M
 import Data.Foldable (foldMap)
 
 newtype StmtID = StmtID { fromStmtID :: Int } deriving (Show, Eq, Ord, Num, Enum)
-newtype VarID = VarID { fromVarID :: Int } deriving (Show, Eq, Ord, Num, Enum)
+newtype VarID = VarID { fromVarID :: Int } deriving (Show, Eq, Ord, Num, Enum) -- TODO we should have separate var, typevar, nsvar, and procname types
 newtype RecordMember = RecordMember { fromRecordMember :: Int } deriving (Show, Eq, Ord, Num, Enum)
 newtype Tag = Tag { fromTag :: String } deriving (Show, Eq, Ord)
 data Stmt = AssignVar VarID VarID StmtID
