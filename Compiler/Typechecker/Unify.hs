@@ -3,7 +3,7 @@ module Compiler.Typechecker.Unify where
 import Compiler.Typechecker.Types
 import Compiler.Typechecker.Monads
 
-import Control.Monad (unless, join, liftM2)
+import Control.Monad (unless, join, liftM2, zipWithM_)
 import Data.Maybe (fromMaybe)
 
 simplifyType :: (UnifyMonad m) => Type -> m Type
@@ -26,13 +26,13 @@ unifyTypes_ a b | a == b = pure ()
 unifyTypes_ (VarType va) (VarType vb) = do
   tmpa <- varIsTemplateType va
   tmpb <- varIsTemplateType vb
-  if (not tmpa) then assignVar va (VarType vb)
-  else if (not tmpb) then assignVar vb (VarType va)
+  if not tmpa then assignVar va (VarType vb)
+  else if not tmpb then assignVar vb (VarType va)
   else fail "Tried to unify two template types"
 unifyTypes_ (VarType v) t = assignVar v t -- will fail if v is a template type; that's good, so we don't need to check for it here
 unifyTypes_ t s@(VarType _) = unifyTypes_ s t
 unifyTypes_ (RecordsType a) (RecordsType b) | length a /= length b || sum (length <$> a) /= sum (length <$> a) = fail "Tried to unify mismatched record types"
-unifyTypes_ (RecordsType a) (RecordsType b) = sequence_ $ zipWith unifyRecordEntries (concat a) (concat b)
+unifyTypes_ (RecordsType a) (RecordsType b) = zipWithM_ unifyRecordEntries (concat a) (concat b)
 unifyTypes_ _ _ = fail "Tried to unify mismatched types"
 
 unifyRecordEntries :: (UnifyMonad m) => RecordEntryType -> RecordEntryType -> m ()

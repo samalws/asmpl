@@ -7,7 +7,7 @@ import Compiler.Typechecker.Monads
 
 import qualified Data.Set as S
 import qualified Data.Map as M
-import Control.Monad (when)
+import Control.Monad (unless, zipWithM_)
 import Data.Maybe (isJust, fromJust)
 
 -- ptb cant have any constraints that pta doesnt have
@@ -15,7 +15,7 @@ pushPtsGeq :: (GatherMonad m) => ProcType -> ProcType -> m ()
 pushPtsGeq pta ptb = do
   let tmpa = pta.procTypeTemplate
   let tmpb = ptb.procTypeTemplate
-  when (length tmpa.typeArgs /= length tmpb.typeArgs || length tmpa.nsArgs /= length tmpb.nsArgs || length pta.procTypeArgs /= length ptb.procTypeArgs) $ fail "mismatched procs: wrong template/arg length"
+  unless (length tmpa.typeArgs == length tmpb.typeArgs && length tmpa.nsArgs == length tmpb.nsArgs && length pta.procTypeArgs == length ptb.procTypeArgs) $ fail "mismatched procs: wrong template/arg length"
 
   let typesPaired = M.fromList $ tmpa.typeArgs `zip` (VarType <$> tmpb.typeArgs)
   let nssPaired = M.fromList $ tmpa.nsArgs `zip` tmpb.nsArgs
@@ -34,10 +34,10 @@ pushPtsGeq pta ptb = do
   let
     checkConstrB (nb,fb,tb) = do
       let [(_,_,ta)] = filter (\(na,fa,_) -> (nsApplyRewriteHere na,fa) == (nb,fb)) $ S.toList tmpa.nsConstraints
-      when (not $ procsEquivalent (procTypeApplyRewriteHere ta) tb) $ fail "mismatched procs: namespace constraints not matched"
+      unless (procTypeApplyRewriteHere ta `procsEquivalent` tb) $ fail "mismatched procs: namespace constraints not matched"
 
-  when (not $ S.null $ S.difference numConstrsB' numConstrsA') $ fail "mismatched procs: numeric constraints not matched"
-  when (not $ S.null $ S.difference intConstrsB' intConstrsA') $ fail "mismatched procs: int constraints not matched"
+  unless (S.null $ S.difference numConstrsB' numConstrsA') $ fail "mismatched procs: numeric constraints not matched"
+  unless (S.null $ S.difference intConstrsB' intConstrsA') $ fail "mismatched procs: int constraints not matched"
   mapM_ checkConstrB $ S.toList tmpb.nsConstraints
 
 gatherNSConstraint :: (GatherMonad m) => (VarID, String, ProcType) -> m ()
@@ -62,7 +62,7 @@ getProcType ns fn = do
 
 gatherProcCall :: (GatherMonad m) => StmtID -> Stmt -> ProcType -> m () 
 gatherProcCall sid pc@(ProcCall{}) pt = do
-  when (length pc.callTypeArgs /= length pt.procTypeTemplate.typeArgs || length pc.callNSArgs /= length pt.procTypeTemplate.nsArgs || length pc.callArgs /= length pt.procTypeArgs) $ fail "incorrect number of proc arguments"
+  unless (length pc.callTypeArgs == length pt.procTypeTemplate.typeArgs && length pc.callNSArgs == length pt.procTypeTemplate.nsArgs && length pc.callArgs == length pt.procTypeArgs) $ fail "incorrect number of proc arguments"
   let typesPaired = M.fromList $ pt.procTypeTemplate.typeArgs `zip` pc.callTypeArgs
   let nssPaired = M.fromList $ pt.procTypeTemplate.nsArgs `zip` pc.callNSArgs
 
@@ -73,7 +73,7 @@ gatherProcCall sid pc@(ProcCall{}) pt = do
   let expectedArgTypes = typeApplyRewriteHere . snd <$> pt.procTypeArgs
   realArgTypes <- mapM (getVarTypeAt sid) pc.callArgs
 
-  sequence_ $ zipWith pushEqConstraint realArgTypes expectedArgTypes
+  zipWithM_ pushEqConstraint realArgTypes expectedArgTypes
 
   mapM_ (pushNumericConstraint . typeApplyRewriteHere . VarType) $ S.toList pt.procTypeTemplate.numericConstraints
   mapM_ (pushIntConstraint . typeApplyRewriteHere . VarType) $ S.toList pt.procTypeTemplate.intConstraints

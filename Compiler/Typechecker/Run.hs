@@ -9,7 +9,7 @@ import Compiler.Typechecker.Unify
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Monad.Reader (ReaderT, runReaderT, asks)
 import Control.Monad.State (StateT, runStateT, gets, modify)
 import Data.Has (Has, getter, modifier)
@@ -77,7 +77,7 @@ instance UnifyMonad UnifyMonadImpl where
     pure (s /= s')
 
 runUnifyMonadImpl :: TemplateVarSet -> NumericVarSet -> IntVarSet -> UnifyMonadImpl t -> EitherString (t, M.Map VarID Type)
-runUnifyMonadImpl t n i = flip runStateT (M.empty) . flip runReaderT (t,n,i)
+runUnifyMonadImpl t n i = flip runStateT M.empty . flip runReaderT (t,n,i)
 
 -- returns varmap, new max id
 makeVarMap :: Proc -> VarID -> (M.Map (StmtID, VarID) VarID, VarID)
@@ -99,7 +99,7 @@ runGatherGlobal ge = fmap M.fromList $ mapSnd f $ M.toList ge.globalNamespaces w
     in runGatherMonadImpl ge proc varset varmap (succ maxID) (gatherProc >> pure varmap)
 
 sequenceMap :: (Monad m, Ord k) => M.Map k (m v) -> m (M.Map k v)
-sequenceMap = fmap M.fromList . sequence . map (\(k,mv) -> (k,) <$> mv) . M.toList
+sequenceMap = fmap M.fromList . mapM (\(k,mv) -> (k,) <$> mv) . M.toList
 
 mMapMapIndexed :: (Monad m, Ord k) => (k -> v -> m w) -> M.Map k v -> m (M.Map k w)
 mMapMapIndexed f = sequenceMap . M.mapWithKey f
@@ -108,7 +108,7 @@ resolveMemberTypeConstrs :: (UnifyMonad m) => [MemberTypeConstr] -> m ()
 resolveMemberTypeConstrs [] = pure ()
 resolveMemberTypeConstrs cs = do
   changes <- mapM (\(MemberTypeConstr a b c) -> anythingHappened $ resolveMemberTypeConstraint a b c) cs
-  when (not $ or changes) $ fail "Failed to resolve member type constraints (all are typevars)"
+  unless (or changes) $ fail "Failed to resolve member type constraints (all are typevars)"
   let cs' = fmap fst $ filter snd $ cs `zip` changes
   resolveMemberTypeConstrs cs'
 
