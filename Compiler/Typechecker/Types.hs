@@ -8,12 +8,15 @@ newtype VarID = VarID { fromVarID :: Int } deriving (Show, Eq, Ord, Num, Enum)
 newtype RecordMember = RecordMember { fromRecordMember :: Int } deriving (Show, Eq, Ord, Num, Enum)
 newtype Tag = Tag { fromTag :: String } deriving (Show, Eq, Ord)
 data Stmt = AssignVar VarID VarID StmtID
+          | AssignVarGeq VarID VarID (Maybe Type) StmtID -- a:t <- b, where type(a) >= type(b)
+          | AssignVarLeq VarID VarID (Maybe Type) StmtID -- a:t <- b, where type(a) <= type(b)
           | AssignLit VarID Literal StmtID
           | AssignMember VarID VarID RecordMember StmtID
           | ProcCall { callNS :: VarID, callFn :: String, callTypeArgs :: [Type], callNSArgs :: [VarID], callArgs :: [VarID], callNext :: StmtID }
           | JNZ VarID {- where you go if nonzero: -} StmtID {- where you go if zero: -} StmtID
-          | AssertVarType VarID Type StmtID
           | Return
+          | Nop StmtID
+          | Unreachable
           deriving (Show, Eq, Ord)
 data Literal = IntLiteral { litIsSigned :: Bool, litBits :: Int, litIntVal :: Integer }
              | FloatLiteral Float
@@ -37,13 +40,16 @@ data ProcType = ProcType { procTypeTemplate :: Template, procTypeArgs :: [(VarID
 data Proc = Proc { procType :: ProcType, procStmts :: M.Map StmtID Stmt } deriving (Show, Eq, Ord) -- 0 is entry point, not that it matters
 
 stmtSuccessors :: Stmt -> S.Set StmtID
-stmtSuccessors (AssignVar _ _ id) = S.singleton id
-stmtSuccessors (AssignLit _ _ id) = S.singleton id
-stmtSuccessors (AssignMember _ _ _ id) = S.singleton id
+stmtSuccessors (AssignVar _ _ a) = S.singleton a
+stmtSuccessors (AssignVarGeq _ _ _ a) = S.singleton a
+stmtSuccessors (AssignVarLeq _ _ _ a) = S.singleton a
+stmtSuccessors (AssignLit _ _ a) = S.singleton a
+stmtSuccessors (AssignMember _ _ _ a) = S.singleton a
 stmtSuccessors pc@(ProcCall{}) = S.singleton (callNext pc)
 stmtSuccessors (JNZ _ a b) = S.fromList [a,b]
-stmtSuccessors (AssertVarType _ _ id) = S.singleton id
 stmtSuccessors Return = S.empty
+stmtSuccessors (Nop a) = S.singleton a
+stmtSuccessors Unreachable = S.empty
 
 litType :: Literal -> Type
 litType i@(IntLiteral{}) = IntType { signed = litIsSigned i, bits = litBits i }

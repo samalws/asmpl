@@ -85,7 +85,17 @@ gatherStmt_ :: (GatherMonad m) => StmtID -> Stmt -> m ()
 gatherStmt_ sid (AssignVar va vb _) = do
   ta <- getVarTypeAt sid va
   tb <- getVarTypeAt sid vb
-  ta `pushEqConstraint` tb -- we can assign a|b <- a
+  ta `pushEqConstraint` tb
+gatherStmt_ sid (AssignVarGeq va vb ta' _) = do
+  ta <- getVarTypeAt sid va
+  tb <- getVarTypeAt sid vb
+  maybe (pure ()) (pushEqConstraint ta) ta'
+  ta `pushGeqConstraint` tb
+gatherStmt_ sid (AssignVarLeq va vb ta' _) = do
+  ta <- getVarTypeAt sid va
+  tb <- getVarTypeAt sid vb
+  maybe (pure ()) (pushEqConstraint ta) ta'
+  tb `pushGeqConstraint` ta
 gatherStmt_ sid (AssignLit v l _) = do
   tv <- getVarTypeAt sid v
   pushEqConstraint tv (litType l)
@@ -101,28 +111,20 @@ gatherStmt_ sid pc@(ProcCall{}) = do
 gatherStmt_ sid (JNZ v _ _) = do
   tv <- getVarTypeAt sid v
   pushIntConstraint tv
-gatherStmt_ sid (AssertVarType v t _) = do
-  tv <- getVarTypeAt sid v
-  pushEqConstraint tv t
+gatherStmt_ _ (Nop _) = pure ()
+gatherStmt_ _ Unreachable = pure ()
 gatherStmt_ _ Return = pure ()
 
 gatherStmtNext :: (GatherMonad m) => StmtID -> Stmt -> m ()
 gatherStmtNext sid thisStmt = do
-  proc <- getProc
-  allVars <- getAllVars
+  allVarsList <- S.toList <$> getAllVars
   let
-    allVarsList = S.toList allVars
-    handleNextStmtVar sid' (geq,v) = do
+    handleNextStmtVar sid' v = do
       tv <- getVarTypeAt sid v
       tv' <- getVarTypeAt sid' v
-      let pushConstraint = if geq then pushGeqConstraint else pushEqConstraint
-      tv' `pushConstraint` tv -- since we "assign" tv' <- tv
-    modifiedVarsList (AssertVarType v' _ _) = map (\v -> ((v == v'), v)) allVarsList
-    modifiedVarsList _ = map (False,) allVarsList
-    handleNextStmt sid' = do
-      let Just nextStmt = sid' `M.lookup` proc.procStmts
-      mapM_ (handleNextStmtVar sid') (modifiedVarsList nextStmt)
-  mapM_ handleNextStmt (stmtSuccessors thisStmt)
+      tv `pushEqConstraint` tv'
+    handleNextStmt sid' = mapM_ (handleNextStmtVar sid') allVarsList
+  mapM_ handleNextStmt $ stmtSuccessors thisStmt
 
 gatherStmt :: (GatherMonad m) => StmtID -> Stmt -> m ()
 gatherStmt sid thisStmt = gatherStmt_ sid thisStmt >> gatherStmtNext sid thisStmt
