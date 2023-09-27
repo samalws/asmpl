@@ -45,7 +45,7 @@ resolveMemberTypeConstraint_ (RecordsType r) (RecordMember i) t = mapM_ resolveI
   resolveIndividual_ l | i >= length l = fail "Invalid record lookup"
   resolveIndividual_ l = resolveEntry_ (l !! i)
   resolveEntry_ (RecordEntryType s _) = unifyTypes s t
-resolveMemberTypeConstraint_ (VarType _) _ _ = pure ()
+resolveMemberTypeConstraint_ (VarType _) _ _ = pure () -- hopefully we can loop around
 resolveMemberTypeConstraint_ _ _ _ = fail "Failed to unify member type constraint on non record type"
 
 -- past here we can assume that all vars should be resolved...

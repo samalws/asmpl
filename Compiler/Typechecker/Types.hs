@@ -3,9 +3,9 @@ module Compiler.Typechecker.Types where
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-newtype StmtID = StmtID { fromStmtID :: Int } deriving (Show, Eq, Ord, Num)
-newtype VarID = VarID { fromVarID :: Int } deriving (Show, Eq, Ord, Num)
-newtype RecordMember = RecordMember { fromRecordMember :: Int } deriving (Show, Eq, Ord, Num)
+newtype StmtID = StmtID { fromStmtID :: Int } deriving (Show, Eq, Ord, Num, Enum)
+newtype VarID = VarID { fromVarID :: Int } deriving (Show, Eq, Ord, Num, Enum)
+newtype RecordMember = RecordMember { fromRecordMember :: Int } deriving (Show, Eq, Ord, Num, Enum)
 newtype Tag = Tag { fromTag :: String } deriving (Show, Eq, Ord)
 data Stmt = AssignVar VarID VarID StmtID
           | AssignLit VarID Literal StmtID
@@ -64,3 +64,7 @@ procTypeApplyRewrite tm nm pt = undefined -- TODO UHHHHHHHHHHh
 
 procsEquivalent :: ProcType -> ProcType -> Bool
 procsEquivalent pta ptb = undefined -- TODO
+
+-- returns var set, highest var
+getVarSet :: Proc -> (S.Set VarID, VarID)
+getVarSet = undefined -- TODO

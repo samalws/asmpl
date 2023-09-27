@@ -106,12 +106,9 @@ gatherStmt_ sid (AssertVarType v t _) = do
   pushEqConstraint tv t
 gatherStmt_ _ Return = pure ()
 
-gatherStmt :: (GatherMonad m) => StmtID -> m ()
-gatherStmt sid = do
+gatherStmtNext :: (GatherMonad m) => StmtID -> Stmt -> m ()
+gatherStmtNext sid thisStmt = do
   proc <- getProc
-  let Just thisStmt = sid `M.lookup` proc.procStmts
-  gatherStmt_ sid thisStmt
-
   allVars <- getAllVars
   let
     allVarsList = S.toList allVars
@@ -126,3 +123,11 @@ gatherStmt sid = do
       let Just nextStmt = sid' `M.lookup` proc.procStmts
       mapM_ (handleNextStmtVar sid') (modifiedVarsList nextStmt)
   mapM_ handleNextStmt (stmtSuccessors thisStmt)
+
+gatherStmt :: (GatherMonad m) => StmtID -> Stmt -> m ()
+gatherStmt sid thisStmt = gatherStmt_ sid thisStmt >> gatherStmtNext sid thisStmt
+
+gatherProc :: (GatherMonad m) => m ()
+gatherProc = do
+  proc <- getProc
+  mapM_ (uncurry gatherStmt) $ M.toList proc.procStmts
